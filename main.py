@@ -12,7 +12,7 @@
 # )
 # print(response.text)
 
-import os
+import os, re, dateparser
 from dotenv import load_dotenv
 from google import genai
 from langchain_community.document_loaders import PyPDFLoader
@@ -20,6 +20,7 @@ from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_google_genai import GoogleGenerativeAIEmbeddings, ChatGoogleGenerativeAI
 from langchain_community.vectorstores import FAISS
 from langchain.chains import RetrievalQA
+
 
 
 #load the environment variables
@@ -52,34 +53,67 @@ retrieval_qa = RetrievalQA.from_chain_type(
     return_source_documents=True
 )
 
+def validate_email(email):
+    """Validate the email format."""
+    if not email:
+        return False
+    return re.match(r"[^@]+@[^@]+\.[^@]+", email)
 
-#appointment booking system
-def collect_user_info():
-    print("\n📞 Let's collect your contact information.")
-    name = input("Your Name: ")
-    phone = input("Your Phone Number: ")
-    email = input("Your Email: ")
-    print("\nThank you! Our team will contact you soon.")
-    # You can add logic here to store or process the collected info
-    return {"name": name, "phone": phone, "email": email}
-
-
+def validate_phone(phone):
+    """Validate the phone number format."""
+    if not phone:
+        return False           
+    return re.match(r"^\+?[1-9]\d{1,14}$", phone)
 
 #ask a question
-print("💬 Ask me anything about your document (type 'exit' to quit)\n")
+print("Ask me anything about your document (type 'exit' to quit)\n")
 
 while True:
     question = input("You: ")
     if question.lower() in ['exit', 'quit']:
         break
+
+
+    if "call me" in question.lower() or "book appointment" in question.lower():
+        print("Okay! Let's book an appointment.")
     
-    # Check if user wants to be called
-    if "call me" in question.lower() or "contact me" in question.lower():
-        user_info = collect_user_info()
-        print(f"Collected info: {user_info}\n")
+    # Step 1: Ask for date
+        date_query = input("When should we contact you? (e.g. on June 9th): ")
+        parsed_date = dateparser.parse(date_query)
+    
+        if not parsed_date:
+            print("Couldn't understand the date. Please try again.\n")
+            continue
+    
+        # Step 2: Ask for name, phone, email
+        name = input("Your name: ")
+        
+        while True:
+            phone = input("Your phone number (format: +1234567890): ")
+            if validate_phone(phone):
+                break
+            
+            print("Invalid phone number format. Please try again.")
+            
+        while True:
+            email = input("Your email address: ")
+            if validate_email(email):
+                break
+            
+            print("Invalid email format. Please try again.")    
+    
+        # Step 3: Format and display confirmation
+        print("\n Appointment booked!")
+        print(f"Name: {name}")
+        print(f"Phone: {phone}")
+        print(f"Email: {email}")
+        print(f"Date: {parsed_date.strftime('%Y-%m-%d')}\n")
         continue
 
-    output = retrieval_qa.invoke({"query": question})
+
+    # Default: document Q&A
+    concise_query = f"Answer concisely: {question}"
+    output = retrieval_qa.invoke({"query": concise_query})
     print("Gemini:", output["result"], "\n")
 
 
